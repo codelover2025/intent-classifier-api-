@@ -7,7 +7,7 @@ import logging
 # Initialize the FastAPI app
 app = FastAPI()
 
-# Load model at startup
+# Load the classifier model at startup
 classifier = HybridClassifier()
 try:
     classifier.load_model("data/models/classifier.pkl")
@@ -15,19 +15,19 @@ except Exception as e:
     logging.error(f"Model loading failed: {e}")
     raise RuntimeError("Model could not be loaded!")
 
-# Request model
+# Request model (input)
 class PredictRequest(BaseModel):
-    key: str       # API key
-    text: str      # Input text to classify
-    guid: str      # Passthrough identifier
+    key: str       # API key (can also be in query param)
+    text: str      # Text to classify
+    guid: str      # Identifier (client passthrough)
 
-# Response model
+# Response model (output)
 class PredictResponse(BaseModel):
     intent: str
     text: str
     guid: str
 
-# Prediction endpoint (POST only)
+# Prediction route
 @app.post("/predict", response_model=PredictResponse)
 async def predict(
     request: PredictRequest,
@@ -44,19 +44,19 @@ async def predict(
         logging.error(f"Prediction error: {e}")
         raise HTTPException(status_code=500, detail="Error during prediction")
 
-# Optional: Warn if user sends GET to /predict
+# GET /predict warning
 @app.get("/predict")
 async def get_predict_warning():
     return {
         "error": "❌ This endpoint only accepts POST requests. Use POST /predict with a JSON payload."
     }
 
-# Welcome route (GET /)
+# Welcome route
 @app.get("/")
 def read_root():
-    return {"message": "👋 Welcome to the Intent Classifier API"}
+    return {"message": " Welcome to the Intent Classifier API"}
 
-# Optional: Handle POST / with a basic response
+# Handle POST to root for clarity
 @app.post("/")
 def post_root():
     return {
@@ -68,7 +68,7 @@ def post_root():
 def status():
     return {"status": "✅ Server is running"}
 
-# For local testing only
+# Local development runner (optional if using `python -m uvicorn`)
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
