@@ -1,0 +1,12 @@
+text_intent_api/
+├── app/
+│   ├── main.py                  # FastAPI app
+│   ├── classifier.py            # Hybrid classifier
+│   ├── train_model.py           # Model training script
+│   └── utils/
+│       ├── auth.py              # API key validation
+│       └── preprocess.py        # Text cleaning
+├── data/
+│   ├── raw/SEOLeadDataset.csv   # Your dataset
+│   └── models/classifier.pkl    # Trained model
+└── requirements.txt             # fastapi, scikit-learn, pandas
