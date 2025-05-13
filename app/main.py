@@ -1,7 +1,8 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from pydantic import BaseModel
 from app.classifier import HybridClassifier
 from app.utils.auth import validate_api_key
+import requests
 
 app = FastAPI()
 
@@ -50,6 +51,12 @@ def read_root():
 @app.get("/status")
 def status():
     return {"status": "Server is running"}
+
+@app.post("/")
+def post_root(request: Request):
+    # You can define the handling logic for the POST request here.
+    return {"message": "This is a POST request to the root!"}
+
 
 # Local development entry point
 if __name__ == "__main__":
