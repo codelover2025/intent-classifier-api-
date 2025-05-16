@@ -1,10 +1,36 @@
 import re
+import string
+from typing import List
 
 def clean_text(text: str) -> str:
-    """Basic text cleaning."""
+    """
+    Clean and preprocess text for classification.
+    
+    Args:
+        text: Input text string
+        
+    Returns:
+        Cleaned text string
+    """
+    # Convert to lowercase
     text = text.lower()
-    text = re.sub(r"http\S+|www\S+|https\S+", "", text)  # Remove URLs
-    text = re.sub(r"\S+@\S+", "", text)                  # Remove emails
-    text = re.sub(r"\d{10,}", "", text)                  # Remove phone numbers
-    text = re.sub(r"[^\w\s]", "", text)                  # Remove punctuation
-    return text.strip()
+    
+    # Remove punctuation
+    text = text.translate(str.maketrans('', '', string.punctuation))
+    
+    # Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text
+
+def tokenize(text: str) -> List[str]:
+    """
+    Tokenize text into words.
+    
+    Args:
+        text: Input text string
+        
+    Returns:
+        List of tokens
+    """
+    return text.split()

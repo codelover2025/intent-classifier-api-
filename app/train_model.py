@@ -1,35 +1,51 @@
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+import os
 from sklearn.model_selection import train_test_split
-import joblib
-from app.utils.preprocess import clean_text
+from app.classifier import IntentClassifier
 
-def train_model(data_path: str, model_save_path: str):
-    """Train and save intent classifier."""
-    df = pd.read_csv(data_path)
-    df["text"] = df["text"].apply(clean_text)
+def train_model():
+    """Train and save the intent classification model."""
+    # Path to dataset
+    dataset_path = "data/raw/SEOLeadDataset.csv"
+    model_path = "data/models/classifier.pkl"
     
-    # Train/test split
-    X_train, X_test, y_train, y_test = train_test_split(
-        df["text"], df["label"], test_size=0.2, random_state=42
-    )
+    # Check if dataset exists
+    if not os.path.exists(dataset_path):
+        print(f"Dataset not found at {dataset_path}")
+        return False
     
-    # Feature extraction
-    vectorizer = TfidfVectorizer(max_features=1000)
-    X_train_vec = vectorizer.fit_transform(X_train)
-    X_test_vec = vectorizer.transform(X_test)
+    # Load dataset
+    try:
+        df = pd.read_csv(dataset_path)
+        print(f"Loaded dataset with {len(df)} samples")
+    except Exception as e:
+        print(f"Error loading dataset: {e}")
+        return False
+    
+    # Ensure required columns exist
+    required_columns = ['text', 'intent']
+    if not all(col in df.columns for col in required_columns):
+        print(f"Dataset missing required columns: {required_columns}")
+        return False
+    
+    # Initialize classifier
+    classifier = IntentClassifier()
     
     # Train model
-    model = LogisticRegression()
-    model.fit(X_train_vec, y_train)
+    print("Training model...")
+    metrics = classifier.train(df['text'].tolist(), df['intent'].tolist())
     
-    # Save model + vectorizer
-    joblib.dump((vectorizer, model), model_save_path)
-    print(f"Model saved to {model_save_path}")
+    # Print metrics
+    print("Training complete. Metrics:")
+    for label, metrics_dict in metrics.items():
+        if label in ['macro avg', 'weighted avg']:
+            print(f"{label}: precision={metrics_dict['precision']:.2f}, recall={metrics_dict['recall']:.2f}, f1-score={metrics_dict['f1-score']:.2f}")
+    
+    # Save model
+    print(f"Saving model to {model_path}")
+    classifier.save(model_path)
+    
+    return True
 
 if __name__ == "__main__":
-    train_model(
-        data_path="data/raw/SEOLeadDataset.csv",
-        model_save_path="data/models/classifier.pkl"
-    )
+    train_model()

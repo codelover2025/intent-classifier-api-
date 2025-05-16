@@ -1,74 +1,111 @@
-from fastapi import FastAPI, HTTPException, Depends, Request
-from pydantic import BaseModel
-from app.classifier import HybridClassifier
-from app.utils.auth import validate_api_key
-import logging
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware  # Import CORSMiddleware
+from app.schemas import PredictionRequest
+from app.classifier import IntentClassifier
+import os
 
-# Initialize the FastAPI app
 app = FastAPI()
 
+# Allow CORS for testing purposes (optional)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Load the classifier model at startup
-classifier = HybridClassifier()
-try:
-    classifier.load_model("data/models/classifier.pkl")
-except Exception as e:
-    logging.error(f"Model loading failed: {e}")
-    raise RuntimeError("Model could not be loaded!")
+model_path = "data/models/classifier.pkl"
+classifier = IntentClassifier()
+if os.path.exists(model_path):
+    classifier.load(model_path)
+else:
+    classifier = None
 
-# Request model (input)
-class PredictRequest(BaseModel):
-    key: str       # API key (can also be in query param)
-    text: str      # Text to classify
-    guid: str      # Identifier (client passthrough)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Response model (output)
-class PredictResponse(BaseModel):
-    intent: str
-    text: str
-    guid: str
+@app.get("/favicon.ico")
+async def favicon():
+    return RedirectResponse(url="/static/favicon.ico")
 
-# Prediction route
-@app.post("/predict", response_model=PredictResponse)
-async def predict(
-    request: PredictRequest,
-    api_key: str = Depends(validate_api_key)
-):
-    try:
-        intent = classifier.predict(request.text)
-        return PredictResponse(
-            intent=intent,
-            text=request.text,
-            guid=request.guid
-        )
-    except Exception as e:
-        logging.error(f"Prediction error: {e}")
-        raise HTTPException(status_code=500, detail="Error during prediction")
-
-# GET /predict warning
-@app.get("/predict")
-async def get_predict_warning():
-    return {
-        "error": "❌ This endpoint only accepts POST requests. Use POST /predict with a JSON payload."
-    }
-
-# Welcome route
 @app.get("/")
-def read_root():
-    return {"message": " Welcome to the Intent Classifier API"}
+async def root_get():
+    return {"message": "Welcome to the FastAPI app"}
 
-# Handle POST to root for clarity
 @app.post("/")
-def post_root():
-    return {
-        "info": "⚠️ POST / is not used for predictions. Please use POST /predict with the correct JSON format."
-    }
+async def root_post(request: PredictionRequest):
+    if classifier is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    try:
+        prediction = classifier.predict(request.text)
+        return {
+            "guid": request.guid,
+            "intent": prediction,
+            "text": request.text
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-# Server health check
-@app.get("/status")
-def status():
-    return {"status": "✅ Server is running"}
+@app.post("/classify")
+async def classify(request: PredictionRequest):
+    if classifier is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    try:
+        prediction = classifier.predict(request.text)
+        return {
+            "guid": request.guid,
+            "intent": prediction,
+            "text": request.text
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-# Local development runner (optional if using `python -m uvicorn`)
+def train_model():
+    """Train and save the intent classification model."""
+    # Path to dataset
+    dataset_path = "data/raw/SEOLeadDataset.csv"
+    model_path = "data/models/classifier.pkl"
+    
+    # Check if dataset exists
+    if not os.path.exists(dataset_path):
+        print(f"Dataset not found at {dataset_path}")
+        return False
+    
+    # Load dataset
+    try:
+        df = pd.read_csv(dataset_path)
+        print(f"Loaded dataset with {len(df)} samples")
+    except Exception as e:
+        print(f"Error loading dataset: {e}")
+        return False
+    
+    # Ensure required columns exist
+    required_columns = ['text', 'intent']
+    if not all(col in df.columns for col in required_columns):
+        print(f"Dataset missing required columns: {required_columns}")
+        return False
+    
+    # Initialize classifier
+    classifier = IntentClassifier()
+    
+    # Train model
+    print("Training model...")
+    metrics = classifier.train(df['text'].tolist(), df['intent'].tolist())
+    
+    # Print metrics
+    print("Training complete. Metrics:")
+    for label, metrics_dict in metrics.items():
+        if label in ['macro avg', 'weighted avg']:
+            print(f"{label}: precision={metrics_dict['precision']:.2f}, recall={metrics_dict['recall']:.2f}, f1-score={metrics_dict['f1-score']:.2f}")
+    
+    # Save model
+    print(f"Saving model to {model_path}")
+    classifier.save(model_path)
+    
+    return True
+
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    train_model()
