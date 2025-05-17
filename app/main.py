@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware  # Import CORSMiddleware
 from app.schemas import PredictionRequest
 from app.classifier import IntentClassifier
 import os
+import logging
 
 app = FastAPI()
 
@@ -49,12 +50,39 @@ async def root_post(request: PredictionRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Function to validate API key
+def validate_key(key: str) -> bool:
+    # Assume the valid key is stored in an environment variable
+    valid_key = os.getenv('API_KEY')
+    return key == valid_key
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+
+# Modify the /classify endpoint
 @app.post("/classify")
-async def classify(request: PredictionRequest):
+async def classify(key: str, request: PredictionRequest):
+    # Validate the API key
+    if not validate_key(key):
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+
+    # Rule-based filtering (simple example)
+    if "PHP" in request.text:
+        logging.info("Classified as PHPLead by rule-based filter.")
+        return {
+            "guid": request.guid,
+            "intent": "PHPLead",
+            "text": request.text
+        }
+
+    # If classifier is not loaded
     if classifier is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
+
     try:
+        # Use the ML model to predict the intent
         prediction = classifier.predict(request.text)
+        logging.info(f"Classified as {prediction} by ML model.")
         return {
             "guid": request.guid,
             "intent": prediction,
