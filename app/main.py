@@ -2,12 +2,16 @@ from flask import Flask, request, jsonify, redirect
 import os
 import logging
 from functools import wraps
+import traceback
 
 # Initialize Flask app
 app = Flask(__name__)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # CORS configuration (optional)
@@ -38,52 +42,84 @@ class IntentClassifier:
             return True
         except Exception as e:
             logger.error(f"Error loading model: {e}")
+            logger.error(traceback.format_exc())
             return False
     
     def predict(self, text: str) -> str:
-        # Replace with actual prediction logic
-        return "mock_prediction"
+        try:
+            # Replace with actual prediction logic
+            return "mock_prediction"
+        except Exception as e:
+            logger.error(f"Error during prediction: {e}")
+            logger.error(traceback.format_exc())
+            raise
     
     def train(self, texts: list, intents: list) -> dict:
-        # Replace with actual training logic
-        return {"macro avg": {"precision": 0.9, "recall": 0.9, "f1-score": 0.9}}
+        try:
+            # Replace with actual training logic
+            return {"macro avg": {"precision": 0.9, "recall": 0.9, "f1-score": 0.9}}
+        except Exception as e:
+            logger.error(f"Error during training: {e}")
+            logger.error(traceback.format_exc())
+            raise
     
     def save(self, model_path: str) -> bool:
-        # Replace with actual save logic
-        logger.info(f"Mock saving model to {model_path}")
-        return True
+        try:
+            # Replace with actual save logic
+            logger.info(f"Mock saving model to {model_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving model: {e}")
+            logger.error(traceback.format_exc())
+            return False
 
 # Load the classifier model at startup
-model_path = "data/models/classifier.pkl"
+model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "models", "classifier.pkl")
 classifier = None
 
 try:
-    classifier = IntentClassifier()
-    if os.path.exists(model_path):
+    logger.info(f"Attempting to load model from: {model_path}")
+    if not os.path.exists(model_path):
+        logger.error(f"Model file does not exist at {model_path}")
+    else:
+        classifier = IntentClassifier()
         loaded = classifier.load(model_path)
         if loaded:
             logger.info(f"Model loaded successfully from {model_path}")
         else:
             logger.error(f"Failed to load model from {model_path}")
             classifier = None
-    else:
-        logger.error(f"Model file does not exist at {model_path}")
-        classifier = None
 except Exception as e:
     logger.error(f"Exception during model loading: {e}")
+    logger.error(traceback.format_exc())
     classifier = None
 
 @app.route('/')
 def home():
-    return jsonify({"message": "Hello from Flask on cPanel!"})
+    try:
+        return jsonify({"message": "Hello from Flask on cPanel!"})
+    except Exception as e:
+        logger.error(f"Error in home route: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route('/favicon.ico')
 def favicon():
-    return redirect('/static/favicon.ico')
+    try:
+        return redirect('/static/favicon.ico')
+    except Exception as e:
+        logger.error(f"Error in favicon route: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route('/', methods=['GET'])
 def root_get():
-    return jsonify({"message": "Welcome to the Flask app"})
+    try:
+        return jsonify({"message": "Welcome to the Flask app"})
+    except Exception as e:
+        logger.error(f"Error in root_get route: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route('/', methods=['POST'])
 def root_post():
@@ -95,6 +131,7 @@ def root_post():
         request_data = PredictionRequest(**data)
     except Exception as e:
         logger.error(f"Invalid request data: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({"error": "Invalid request format"}), 400
 
     if classifier is None:
@@ -111,7 +148,8 @@ def root_post():
             "text": request_data.text
         })
     except Exception as e:
-        logger.error(f"Exception during prediction: {e}", exc_info=True)
+        logger.error(f"Exception during prediction: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({"error": "Internal server error"}), 500
 
 def validate_key(key: str) -> bool:
@@ -139,6 +177,7 @@ def classify():
         request_data = PredictionRequest(**data)
     except Exception as e:
         logger.error(f"Invalid request data: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({"error": "Invalid request format"}), 400
 
     # Rule-based filtering
@@ -164,7 +203,8 @@ def classify():
             "text": request_data.text
         })
     except Exception as e:
-        logger.error(f"Exception during classify prediction: {e}", exc_info=True)
+        logger.error(f"Exception during classify prediction: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({"error": "Internal server error"}), 500
 
 def train_model():
@@ -214,4 +254,5 @@ def train_model():
     return True
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
