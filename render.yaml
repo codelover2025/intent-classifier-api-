@@ -8,3 +8,5 @@ services:
     envVars:
       - key: ENV
         value: production
+    runtime:
+      python: 3.10
