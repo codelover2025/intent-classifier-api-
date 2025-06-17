@@ -1,0 +1,21 @@
+<!-- app/templates/form.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Text Intent Predictor</title>
+</head>
+<body>
+    <h2>Text Intent Predictor</h2>
+    <form method="post">
+        <label>Enter your message:</label><br>
+        <input type="text" name="user_text" style="width: 300px;" required><br><br>
+        <button type="submit">Predict</button>
+    </form>
+
+    {% if result %}
+        <h3>Input Text: "{{ input_text }}"</h3>
+        <h3>Predicted Intent: <span style="color:green;">{{ result }}</span></h3>
+    {% endif %}
+</body>
+</html>
