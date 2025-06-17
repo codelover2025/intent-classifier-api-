@@ -1,8 +1,13 @@
 __pycache__/
 *.pyc
-*.pkl
+*.pyo
+*.pyd
+*.sqlite3
+*.db
 .env
+.venv/
 venv/
+.env.*
 .DS_Store
 .idea/
-*.db
+.vscode/
