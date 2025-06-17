@@ -9,7 +9,7 @@ api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 # This would typically be stored securely, e.g., in environment variables
 # For this example, we'll use a simple approach
-API_KEYS = set()
+API_KEYS = {"test_api_key"}  # Initialize with a default test key
 
 def load_api_keys(file_path: str = None):
     """
