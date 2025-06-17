@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
-
+from fastapi import Form  # Make sure this import is at the top
 import os
 import joblib
 
@@ -35,17 +35,23 @@ model = joblib.load(MODEL_PATH)
 async def root():
     return RedirectResponse(url="/form")
 
+
+
 # -------------------------------
 # ✅ API Route: /predict
 # -------------------------------
 @app.post("/predict")
-async def predict_api(text: str, api_key: str):
+async def predict_api(
+    text: str = Form(...),
+    api_key: str = Form(...)
+):
     if not verify_api_key(api_key):
         return JSONResponse(status_code=401, content={"error": "Invalid API key"})
 
     cleaned = clean_text(text)
     intent = model.predict([cleaned])[0]
     return {"text": text, "predicted_intent": intent}
+
 
 
 # -------------------------------
