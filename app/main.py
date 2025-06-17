@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
-from fastapi import Form  # Make sure this import is at the top
+from pydantic import BaseModel
 import os
 import joblib
 
@@ -28,6 +28,11 @@ app.add_middleware(
 MODEL_PATH = os.path.join("data", "models", "classifier.pkl")
 model = joblib.load(MODEL_PATH)
 
+# Pydantic model for request validation
+class PredictionRequest(BaseModel):
+    text: str
+    api_key: str
+
 # -------------------------------
 # ✅ Root Route
 # -------------------------------
@@ -41,16 +46,13 @@ async def root():
 # ✅ API Route: /predict
 # -------------------------------
 @app.post("/predict")
-async def predict_api(
-    text: str = Form(...),
-    api_key: str = Form(...)
-):
-    if not verify_api_key(api_key):
+async def predict_api(request: PredictionRequest):
+    if not verify_api_key(request.api_key):
         return JSONResponse(status_code=401, content={"error": "Invalid API key"})
 
-    cleaned = clean_text(text)
+    cleaned = clean_text(request.text)
     intent = model.predict([cleaned])[0]
-    return {"text": text, "predicted_intent": intent}
+    return {"text": request.text, "predicted_intent": intent}
 
 
 
