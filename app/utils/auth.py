@@ -28,6 +28,18 @@ def load_api_keys(file_path: str = None):
         # For testing, add a default key
         API_KEYS = {"test_api_key"}
 
+def verify_api_key(api_key: str) -> bool:
+    """
+    Verify if the provided API key is valid.
+    
+    Args:
+        api_key: The API key to verify
+        
+    Returns:
+        bool: True if the API key is valid, False otherwise
+    """
+    return api_key in API_KEYS
+
 def get_api_key(api_key_header: str = Security(api_key_header)):
     """
     Validate API key from request header.

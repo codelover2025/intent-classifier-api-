@@ -1,258 +1,67 @@
-from flask import Flask, request, jsonify, redirect
+# app/main.py
+
+from fastapi import FastAPI, Request, Form
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.templating import Jinja2Templates
+
 import os
-import logging
-from functools import wraps
-import traceback
+import joblib
 
-# Initialize Flask app
-app = Flask(__name__)
+from app.utils.preprocess import clean_text
+from app.utils.auth import verify_api_key
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Setup
+app = FastAPI()
+templates = Jinja2Templates(directory="app/templates")
+
+# CORS (optional if frontend is hosted separately)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Set specific origins in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-logger = logging.getLogger(__name__)
 
-# CORS configuration (optional)
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', '*')
-    response.headers.add('Access-Control-Allow-Methods', '*')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    return response
+# Load model
+MODEL_PATH = os.path.join("data", "models", "classifier.pkl")
+model = joblib.load(MODEL_PATH)
 
-# Define PredictionRequest class (equivalent to FastAPI schema)
-class PredictionRequest:
-    def __init__(self, guid: str, text: str):
-        self.guid = guid
-        self.text = text
+# -------------------------------
+# ✅ Root Route
+# -------------------------------
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/form")
 
-# Mock IntentClassifier class (replace with your actual implementation)
-class IntentClassifier:
-    def __init__(self):
-        self.model = None
-    
-    def load(self, model_path: str) -> bool:
-        try:
-            # Replace with actual model loading logic
-            logger.info(f"Mock loading model from {model_path}")
-            self.model = "mock_model"
-            return True
-        except Exception as e:
-            logger.error(f"Error loading model: {e}")
-            logger.error(traceback.format_exc())
-            return False
-    
-    def predict(self, text: str) -> str:
-        try:
-            # Replace with actual prediction logic
-            return "mock_prediction"
-        except Exception as e:
-            logger.error(f"Error during prediction: {e}")
-            logger.error(traceback.format_exc())
-            raise
-    
-    def train(self, texts: list, intents: list) -> dict:
-        try:
-            # Replace with actual training logic
-            return {"macro avg": {"precision": 0.9, "recall": 0.9, "f1-score": 0.9}}
-        except Exception as e:
-            logger.error(f"Error during training: {e}")
-            logger.error(traceback.format_exc())
-            raise
-    
-    def save(self, model_path: str) -> bool:
-        try:
-            # Replace with actual save logic
-            logger.info(f"Mock saving model to {model_path}")
-            return True
-        except Exception as e:
-            logger.error(f"Error saving model: {e}")
-            logger.error(traceback.format_exc())
-            return False
+# -------------------------------
+# ✅ API Route: /predict
+# -------------------------------
+@app.post("/predict")
+async def predict_api(text: str, api_key: str):
+    if not verify_api_key(api_key):
+        return JSONResponse(status_code=401, content={"error": "Invalid API key"})
 
-# Load the classifier model at startup
-model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "models", "classifier.pkl")
-classifier = None
+    cleaned = clean_text(text)
+    intent = model.predict([cleaned])[0]
+    return {"text": text, "predicted_intent": intent}
 
-try:
-    logger.info(f"Attempting to load model from: {model_path}")
-    if not os.path.exists(model_path):
-        logger.error(f"Model file does not exist at {model_path}")
-    else:
-        classifier = IntentClassifier()
-        loaded = classifier.load(model_path)
-        if loaded:
-            logger.info(f"Model loaded successfully from {model_path}")
-        else:
-            logger.error(f"Failed to load model from {model_path}")
-            classifier = None
-except Exception as e:
-    logger.error(f"Exception during model loading: {e}")
-    logger.error(traceback.format_exc())
-    classifier = None
 
-@app.route('/')
-def home():
-    try:
-        return jsonify({"message": "Hello from Flask on cPanel!"})
-    except Exception as e:
-        logger.error(f"Error in home route: {e}")
-        logger.error(traceback.format_exc())
-        return jsonify({"error": "Internal server error"}), 500
+# -------------------------------
+# ✅ Web Form Routes
+# -------------------------------
+@app.get("/form", response_class=HTMLResponse)
+async def show_form(request: Request):
+    return templates.TemplateResponse("form.html", {"request": request, "result": None})
 
-@app.route('/favicon.ico')
-def favicon():
-    try:
-        return redirect('/static/favicon.ico')
-    except Exception as e:
-        logger.error(f"Error in favicon route: {e}")
-        logger.error(traceback.format_exc())
-        return jsonify({"error": "Internal server error"}), 500
 
-@app.route('/', methods=['GET'])
-def root_get():
-    try:
-        return jsonify({"message": "Welcome to the Flask app"})
-    except Exception as e:
-        logger.error(f"Error in root_get route: {e}")
-        logger.error(traceback.format_exc())
-        return jsonify({"error": "Internal server error"}), 500
-
-@app.route('/', methods=['POST'])
-def root_post():
-    try:
-        data = request.get_json()
-        if not data or 'guid' not in data or 'text' not in data:
-            raise ValueError("Invalid request format")
-        
-        request_data = PredictionRequest(**data)
-    except Exception as e:
-        logger.error(f"Invalid request data: {e}")
-        logger.error(traceback.format_exc())
-        return jsonify({"error": "Invalid request format"}), 400
-
-    if classifier is None:
-        logger.error("Prediction request received but model is not loaded")
-        return jsonify({"error": "Model not loaded"}), 503
-    
-    try:
-        logger.info(f"Prediction request received: guid={request_data.guid}, text={request_data.text}")
-        prediction = classifier.predict(request_data.text)
-        logger.info(f"Prediction result: {prediction}")
-        return jsonify({
-            "guid": request_data.guid,
-            "intent": prediction,
-            "text": request_data.text
-        })
-    except Exception as e:
-        logger.error(f"Exception during prediction: {e}")
-        logger.error(traceback.format_exc())
-        return jsonify({"error": "Internal server error"}), 500
-
-def validate_key(key: str) -> bool:
-    valid_key = os.getenv('API_KEY', 'default_key')  # Use a default for testing
-    return key == valid_key
-
-def api_key_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        key = request.args.get('key')
-        if not key or not validate_key(key):
-            logger.error("Invalid API Key provided for classify endpoint")
-            return jsonify({"error": "Invalid API Key"}), 401
-        return f(*args, **kwargs)
-    return decorated_function
-
-@app.route('/classify', methods=['POST'])
-@api_key_required
-def classify():
-    try:
-        data = request.get_json()
-        if not data or 'guid' not in data or 'text' not in data:
-            raise ValueError("Invalid request format")
-        
-        request_data = PredictionRequest(**data)
-    except Exception as e:
-        logger.error(f"Invalid request data: {e}")
-        logger.error(traceback.format_exc())
-        return jsonify({"error": "Invalid request format"}), 400
-
-    # Rule-based filtering
-    if "PHP" in request_data.text:
-        logger.info("Classified as PHPLead by rule-based filter.")
-        return jsonify({
-            "guid": request_data.guid,
-            "intent": "PHPLead",
-            "text": request_data.text
-        })
-
-    if classifier is None:
-        logger.error("Classify request received but model is not loaded")
-        return jsonify({"error": "Model not loaded"}), 503
-
-    try:
-        logger.info(f"Classify request received: guid={request_data.guid}, text={request_data.text}")
-        prediction = classifier.predict(request_data.text)
-        logger.info(f"Classified as {prediction} by ML model.")
-        return jsonify({
-            "guid": request_data.guid,
-            "intent": prediction,
-            "text": request_data.text
-        })
-    except Exception as e:
-        logger.error(f"Exception during classify prediction: {e}")
-        logger.error(traceback.format_exc())
-        return jsonify({"error": "Internal server error"}), 500
-
-def train_model():
-    """Train and save the intent classification model."""
-    import pandas as pd
-    
-    # Path to dataset
-    dataset_path = "data/raw/SEOLeadDataset.csv"
-    model_path = "data/models/classifier.pkl"
-    
-    # Check if dataset exists
-    if not os.path.exists(dataset_path):
-        print(f"Dataset not found at {dataset_path}")
-        return False
-    
-    # Load dataset
-    try:
-        df = pd.read_csv(dataset_path)
-        print(f"Loaded dataset with {len(df)} samples")
-    except Exception as e:
-        print(f"Error loading dataset: {e}")
-        return False
-    
-    # Ensure required columns exist
-    required_columns = ['text', 'intent']
-    if not all(col in df.columns for col in required_columns):
-        print(f"Dataset missing required columns: {required_columns}")
-        return False
-    
-    # Initialize classifier
-    classifier = IntentClassifier()
-    
-    # Train model
-    print("Training model...")
-    metrics = classifier.train(df['text'].tolist(), df['intent'].tolist())
-    
-    # Print metrics
-    print("Training complete. Metrics:")
-    for label, metrics_dict in metrics.items():
-        if label in ['macro avg', 'weighted avg']:
-            print(f"{label}: precision={metrics_dict['precision']:.2f}, recall={metrics_dict['recall']:.2f}, f1-score={metrics_dict['f1-score']:.2f}")
-    
-    # Save model
-    print(f"Saving model to {model_path}")
-    classifier.save(model_path)
-    
-    return True
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+@app.post("/form", response_class=HTMLResponse)
+async def submit_form(request: Request, user_text: str = Form(...)):
+    cleaned = clean_text(user_text)
+    intent = model.predict([cleaned])[0]
+    return templates.TemplateResponse("form.html", {
+        "request": request,
+        "result": intent,
+        "input_text": user_text
+    })
